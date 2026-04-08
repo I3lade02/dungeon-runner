@@ -5,7 +5,6 @@ export class UIScene extends Phaser.Scene {
   private hpText!: Phaser.GameObjects.Text;
   private enemyText!: Phaser.GameObjects.Text;
   private waveText!: Phaser.GameObjects.Text;
-  private dashText!: Phaser.GameObjects.Text;
   private gameOverText!: Phaser.GameObjects.Text;
 
   private upgradeContainer?: Phaser.GameObjects.Container;
@@ -32,10 +31,6 @@ export class UIScene extends Phaser.Scene {
       color: "#ffffff",
     });
 
-    this.dashText = this.add.text(20, 116, "SPACE = Dash", {
-      fontSize: "18px",
-      color: "#93c5fd",
-    });
 
     this.gameOverText = this.add
       .text(this.scale.width / 2, this.scale.height / 2, "YOU DIED\nPress SPACE to restart", {
