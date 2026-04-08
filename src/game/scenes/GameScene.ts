@@ -3,14 +3,19 @@ import { Player } from "../entities/Player";
 import { Enemy } from "../entities/Enemy";
 import { getRandomUpgrades, type Upgrade } from "../data/upgrades";
 
-type BulletImage = Phaser.Physics.Arcade.Image & {
-  damage?: number;
+type BulletData = {
+  sprite: Phaser.GameObjects.Rectangle;
+  vx: number;
+  vy: number;
+  damage: number;
+  life: number;
 };
 
 export class GameScene extends Phaser.Scene {
   private player!: Player;
   private enemies!: Phaser.Physics.Arcade.Group;
-  private bullets!: Phaser.Physics.Arcade.Group;
+
+  private bullets: BulletData[] = [];
 
   private keys!: {
     w: Phaser.Input.Keyboard.Key;
@@ -34,20 +39,22 @@ export class GameScene extends Phaser.Scene {
     this.pausedForUpgrade = false;
     this.wave = 1;
     this.canShoot = true;
+    this.bullets = [];
 
     this.physics.world.setBounds(0, 0, this.scale.width, this.scale.height);
 
-    this.add.rectangle(
-      this.scale.width / 2,
-      this.scale.height / 2,
-      this.scale.width - 80,
-      this.scale.height - 80,
-      0x27272a
-    ).setStrokeStyle(4, 0x3f3f46);
+    this.add
+      .rectangle(
+        this.scale.width / 2,
+        this.scale.height / 2,
+        this.scale.width - 80,
+        this.scale.height - 80,
+        0x27272a
+      )
+      .setStrokeStyle(4, 0x3f3f46);
 
     this.player = new Player(this, this.scale.width / 2, this.scale.height / 2);
 
-    this.bullets = this.physics.add.group();
     this.enemies = this.physics.add.group({
       classType: Enemy,
       runChildUpdate: false,
@@ -67,24 +74,6 @@ export class GameScene extends Phaser.Scene {
     this.input.on("pointerdown", () => {
       this.tryShoot();
     });
-
-    this.physics.add.overlap(
-      this.bullets,
-      this.enemies,
-      (bulletObj, enemyObj) => {
-        const bullet = bulletObj as BulletImage;
-        const enemy = enemyObj as Enemy;
-
-        bullet.destroy();
-        enemy.takeDamage(bullet.damage ?? 20);
-
-        this.events.emit("enemy-count-changed", this.enemies.countActive(true));
-
-        if (this.enemies.countActive(true) === 0 && !this.pausedForUpgrade && !this.gameOver) {
-          this.openUpgradeSelection();
-        }
-      }
-    );
 
     this.physics.add.overlap(
       this.player,
@@ -113,7 +102,7 @@ export class GameScene extends Phaser.Scene {
     this.events.emit("wave-changed", this.wave);
   }
 
-  update() {
+  update(_time: number, delta: number) {
     if (this.gameOver || this.pausedForUpgrade) {
       this.player.setVelocity(0, 0);
       return;
@@ -140,17 +129,7 @@ export class GameScene extends Phaser.Scene {
       this.tryShoot();
     }
 
-    const bullets = this.bullets.getChildren() as BulletImage[];
-    for (const bullet of bullets) {
-      if (
-        bullet.x < -50 ||
-        bullet.x > this.scale.width + 50 ||
-        bullet.y < -50 ||
-        bullet.y > this.scale.height + 50
-      ) {
-        bullet.destroy();
-      }
-    }
+    this.updateBullets(delta);
 
     this.events.emit("enemy-count-changed", this.enemies.countActive(true));
   }
@@ -174,30 +153,16 @@ export class GameScene extends Phaser.Scene {
       const bulletX = this.player.x + Math.cos(angle) * offset;
       const bulletY = this.player.y + Math.sin(angle) * offset;
 
-      const bullet = this.physics.add.image(bulletX, bulletY, "__WHITE") as BulletImage;
+      const sprite = this.add.rectangle(bulletX, bulletY, 14, 4, 0xf8fafc);
+      sprite.setRotation(angle);
+      sprite.setDepth(2);
 
-      bullet.setActive(true);
-      bullet.setVisible(true);
-      bullet.setTint(0xf8fafc);
-      bullet.setDisplaySize(14, 4);
-      bullet.setRotation(angle);
-      bullet.setDepth(2);
-
-      const body = bullet.body as Phaser.Physics.Arcade.Body;
-      body.setAllowGravity(false);
-      body.setEnable(true);
-      body.setSize(14, 4, true);
-
-      bullet.damage = bulletDamage;
-
-      this.physics.velocityFromRotation(angle, bulletSpeed, body.velocity);
-
-      this.bullets.add(bullet);
-
-      this.time.delayedCall(1200, () => {
-        if (bullet.active) {
-          bullet.destroy();
-        }
+      this.bullets.push({
+        sprite,
+        vx: Math.cos(angle) * bulletSpeed,
+        vy: Math.sin(angle) * bulletSpeed,
+        damage: bulletDamage,
+        life: 1200,
       });
     };
 
@@ -215,6 +180,61 @@ export class GameScene extends Phaser.Scene {
     this.time.delayedCall(fireRate, () => {
       this.canShoot = true;
     });
+  }
+
+  private updateBullets(delta: number) {
+    const dt = delta / 1000;
+    const enemies = this.enemies.getChildren() as Enemy[];
+
+    for (let i = this.bullets.length - 1; i >= 0; i--) {
+      const bullet = this.bullets[i];
+
+      bullet.sprite.x += bullet.vx * dt;
+      bullet.sprite.y += bullet.vy * dt;
+      bullet.life -= delta;
+
+      let removeBullet = false;
+
+      if (
+        bullet.life <= 0 ||
+        bullet.sprite.x < -50 ||
+        bullet.sprite.x > this.scale.width + 50 ||
+        bullet.sprite.y < -50 ||
+        bullet.sprite.y > this.scale.height + 50
+      ) {
+        removeBullet = true;
+      }
+
+      if (!removeBullet) {
+        for (const enemy of enemies) {
+          if (!enemy.active) continue;
+
+          const distance = Phaser.Math.Distance.Between(
+            bullet.sprite.x,
+            bullet.sprite.y,
+            enemy.x,
+            enemy.y
+          );
+
+          const hitRadius = 18;
+
+          if (distance <= hitRadius) {
+            enemy.takeDamage(bullet.damage);
+            removeBullet = true;
+            break;
+          }
+        }
+      }
+
+      if (removeBullet) {
+        bullet.sprite.destroy();
+        this.bullets.splice(i, 1);
+      }
+    }
+
+    if (this.enemies.countActive(true) === 0 && !this.pausedForUpgrade && !this.gameOver) {
+      this.openUpgradeSelection();
+    }
   }
 
   private spawnWave(count: number) {
@@ -258,6 +278,8 @@ export class GameScene extends Phaser.Scene {
     this.pausedForUpgrade = false;
     this.wave += 1;
 
+    this.clearBullets();
+
     this.events.emit("wave-changed", this.wave);
     this.events.emit("player-hp-changed", this.player.hp);
     this.events.emit("hide-upgrade-selection");
@@ -265,9 +287,17 @@ export class GameScene extends Phaser.Scene {
     this.spawnWave(this.getWaveEnemyCount());
   }
 
+  private clearBullets() {
+    for (const bullet of this.bullets) {
+      bullet.sprite.destroy();
+    }
+    this.bullets = [];
+  }
+
   private handleGameOver() {
     this.gameOver = true;
     this.player.setVelocity(0, 0);
+    this.clearBullets();
     this.events.emit("game-over");
 
     this.input.keyboard?.once("keydown-SPACE", () => {
