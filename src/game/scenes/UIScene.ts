@@ -8,6 +8,25 @@ export class UIScene extends Phaser.Scene {
   private gameOverText!: Phaser.GameObjects.Text;
 
   private upgradeContainer?: Phaser.GameObjects.Container;
+  private readonly handlePlayerHpChanged = (hp: number) => {
+    this.hpText.setText(`HP: ${hp}`);
+  };
+  private readonly handleEnemyCountChanged = (count: number) => {
+    this.enemyText.setText(`Enemies: ${count}`);
+  };
+  private readonly handleWaveChanged = (wave: number) => {
+    this.waveText.setText(`Wave: ${wave}`);
+  };
+  private readonly handleGameOver = () => {
+    this.hideUpgradeSelection();
+    this.gameOverText.setVisible(true);
+  };
+  private readonly handleShowUpgradeSelection = (upgrades: Upgrade[]) => {
+    this.showUpgradeSelection(upgrades);
+  };
+  private readonly handleHideUpgradeSelection = () => {
+    this.hideUpgradeSelection();
+  };
 
   constructor() {
     super("UIScene");
@@ -41,29 +60,31 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setVisible(false);
 
-    gameScene.events.on("player-hp-changed", (hp: number) => {
-      this.hpText.setText(`HP: ${hp}`);
-    });
+    this.bindGameSceneEvents(gameScene.events);
+  }
 
-    gameScene.events.on("enemy-count-changed", (count: number) => {
-      this.enemyText.setText(`Enemies: ${count}`);
-    });
+  private bindGameSceneEvents(events: Phaser.Events.EventEmitter) {
+    events.off("player-hp-changed", this.handlePlayerHpChanged);
+    events.off("enemy-count-changed", this.handleEnemyCountChanged);
+    events.off("wave-changed", this.handleWaveChanged);
+    events.off("game-over", this.handleGameOver);
+    events.off("show-upgrade-selection", this.handleShowUpgradeSelection);
+    events.off("hide-upgrade-selection", this.handleHideUpgradeSelection);
 
-    gameScene.events.on("wave-changed", (wave: number) => {
-      this.waveText.setText(`Wave: ${wave}`);
-    });
+    events.on("player-hp-changed", this.handlePlayerHpChanged);
+    events.on("enemy-count-changed", this.handleEnemyCountChanged);
+    events.on("wave-changed", this.handleWaveChanged);
+    events.on("game-over", this.handleGameOver);
+    events.on("show-upgrade-selection", this.handleShowUpgradeSelection);
+    events.on("hide-upgrade-selection", this.handleHideUpgradeSelection);
 
-    gameScene.events.on("game-over", () => {
-      this.hideUpgradeSelection();
-      this.gameOverText.setVisible(true);
-    });
-
-    gameScene.events.on("show-upgrade-selection", (upgrades: Upgrade[]) => {
-      this.showUpgradeSelection(upgrades);
-    });
-
-    gameScene.events.on("hide-upgrade-selection", () => {
-      this.hideUpgradeSelection();
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      events.off("player-hp-changed", this.handlePlayerHpChanged);
+      events.off("enemy-count-changed", this.handleEnemyCountChanged);
+      events.off("wave-changed", this.handleWaveChanged);
+      events.off("game-over", this.handleGameOver);
+      events.off("show-upgrade-selection", this.handleShowUpgradeSelection);
+      events.off("hide-upgrade-selection", this.handleHideUpgradeSelection);
     });
   }
 

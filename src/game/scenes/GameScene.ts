@@ -29,6 +29,9 @@ export class GameScene extends Phaser.Scene {
   private gameOver = false;
   private pausedForUpgrade = false;
   private wave = 1;
+  private readonly handleUpgradeSelected = (upgrade: Upgrade) => {
+    this.continueToNextWave(upgrade);
+  };
 
   constructor() {
     super("GameScene");
@@ -307,8 +310,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private initEventBridge() {
-    this.events.on("upgrade-selected", (upgrade: Upgrade) => {
-      this.continueToNextWave(upgrade);
-    });
+    this.events.off("upgrade-selected", this.handleUpgradeSelected);
+    this.events.on("upgrade-selected", this.handleUpgradeSelected);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
+  }
+
+  private handleShutdown() {
+    this.events.off("upgrade-selected", this.handleUpgradeSelected);
   }
 }
