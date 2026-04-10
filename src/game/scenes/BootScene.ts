@@ -8,7 +8,6 @@ export class BootScene extends Phaser.Scene {
   preload() {}
 
   create() {
-    this.scene.start("GameScene");
-    this.scene.launch("UIScene");
+    this.scene.start("MenuScene");
   }
 }
